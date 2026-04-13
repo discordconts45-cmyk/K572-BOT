@@ -1,0 +1,114 @@
+import discord, random, datetime, asyncio, os
+from discord.ext import commands
+from flask import Flask
+from threading import Thread
+
+# ===== WEB (ANTI-SLEEP) =====
+app = Flask('')
+@app.route('/')
+def home(): return "ONLINE"
+def run(): app.run(host='0.0.0.0', port=3000)
+Thread(target=run, daemon=True).start()
+
+# ===== BOT =====
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix=",", intents=intents)
+
+# ===== STATUS =====
+@bot.event
+async def on_ready():
+    await bot.change_presence(status=discord.Status.dnd, activity=discord.Game("K572 CONTROL"))
+    print("READY")
+
+# ===== AUTO ROLE + WELCOME =====
+@bot.event
+async def on_member_join(member):
+    role = discord.utils.get(member.guild.roles, name="member")
+    if role:
+        await member.add_roles(role)
+
+    for ch in member.guild.text_channels:
+        if ch.name == "welcome":
+            await ch.send(f"Bine ai venit {member.mention}")
+            break
+
+# ===== SPAM DETECT =====
+spam = {}
+
+@bot.event
+async def on_message(msg):
+    if msg.author.bot: return
+
+    t = datetime.datetime.now().timestamp()
+    spam.setdefault(msg.author.id, []).append(t)
+    spam[msg.author.id] = [x for x in spam[msg.author.id] if t-x < 5]
+
+    if len(spam[msg.author.id]) > 7:
+        await msg.delete()
+        return await msg.channel.send("spam")
+
+    await bot.process_commands(msg)
+
+# ===== HELP =====
+@bot.command()
+async def help(ctx):
+    await ctx.send("""
+bal
+daily
+ban
+kick
+clear
+pule @user
+start / stop
+""")
+
+# ===== FUN =====
+@bot.command()
+async def pule(ctx, member:discord.Member):
+    nr = random.randint(1,100)
+    await ctx.send(f"{member.mention} are {nr}cm 💀")
+
+# ===== SPAM SYSTEM =====
+spam_tasks = {}
+
+@bot.command()
+async def start(ctx, member:discord.Member):
+    if ctx.guild.id in spam_tasks:
+        return await ctx.send("deja merge")
+
+    insults = ["esti slab","npc","zero skill","fail","trash"]
+
+    async def spam_loop():
+        while True:
+            await ctx.send(f"{member.mention} {random.choice(insults)}")
+            await asyncio.sleep(2)
+
+    spam_tasks[ctx.guild.id] = bot.loop.create_task(spam_loop())
+    await ctx.send("spam pornit")
+
+@bot.command()
+async def stop(ctx):
+    task = spam_tasks.get(ctx.guild.id)
+    if task:
+        task.cancel()
+        del spam_tasks[ctx.guild.id]
+        await ctx.send("spam oprit")
+
+# ===== MOD =====
+@bot.command()
+async def ban(ctx, member:discord.Member):
+    await member.ban()
+    await ctx.send("ban")
+
+@bot.command()
+async def kick(ctx, member:discord.Member):
+    await member.kick()
+    await ctx.send("kick")
+
+@bot.command()
+async def clear(ctx, n:int):
+    await ctx.channel.purge(limit=n)
+    await ctx.send("sters")
+
+# ===== START =====
+bot.run(os.getenv("TOKEN"))
